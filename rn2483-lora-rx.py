@@ -5,11 +5,14 @@ import csv
 import codecs
 
 # your TTY
-tty = 'COM7'
+tty = 'COM5'
 ttyb = 57600
 # your devaddr here
 #devaddr = "ABCDEF01"
 #device = "nodes/" + devaddr
+
+
+
 # config.append("mac reset 868")
 # config.append("mac set pwridx 5")
 # config.append("mac set dr 5")
@@ -20,18 +23,33 @@ ttyb = 57600
 # config.append("mac save")
 # config.append("mac join abp")
 
-def send(data, p):
-    data_bytes = data.encode('ascii')
-    p.write(data_bytes + b"\x0d\x0a")
-    #?data_bytes.rstrip()
-    print(data)
-    time.sleep(0.04)
-    rdata = p.readline()
-    rdata = rdata[:-2]
-    print(rdata)
-    #?return rdata
 
-def hextranslate(s):
+def command_with_answer(data, port):
+    port.write(data.encode('ascii') + b"\x0d\x0a")
+    # time.sleep(0.01)
+    s = port.readline()
+    if s == b'ok\r\n':
+        command_with_answer.answer = port.readline()
+        return command_with_answer.answer
+    else:
+        return s
+
+# def send(data, port):
+#     port.write(data.encode('ascii') + b"\x0d\x0a")
+#     # print(data)
+#     time.sleep(0.04)
+#     # rx_data = port.readline()[:-2]
+#     # print(rx_data)
+
+
+def command(data, port):
+    port.write(data.encode() + b"\x0d\x0a")
+    # time.sleep(0.01)
+    if port.readline() == b'ok\r\n':
+        return 1
+
+
+def hex_translate(s):
     res = ""
     if len(s) % 2 == 0 :
         for i in range(int(round(len(s) / 2))):
@@ -41,18 +59,13 @@ def hextranslate(s):
     else:
         return s
 
-def sendd(data, p):
-    data_bytes = data.encode()
-    p.write(data_bytes + b"\x0d\x0a")
-    time.sleep(0.1)
 
-
-def configuration(type):
+def reconfiguration(type):
     config = []
     # config.append("sys factoryRESET")
     config.append("sys reset")
     config.append("mac pause")
-    config.append("radio set freq 868250000")
+    config.append("radio set freq 869250000")
     config.append("radio set pwr 14")
     config.append("radio set afcbw 125")
     config.append("radio set rxbw 125")
@@ -60,100 +73,80 @@ def configuration(type):
     config.append("radio set prlen 8")
     config.append("radio set crc on")
     config.append("radio set cr 4/8")
-    config.append("radio set wdt 0")
-    config.append("radio set sync 12")
-    config.append("radio set bw 125")
+    config.append("radio set wdt 5000")
+    #config.append("radio set sync 12")
+    config.append("radio set bw 250")
     if type == 1:
-        configuration.name = 'LoraSF12'
+        reconfiguration.name = 'LoraSF12'
         config.append("radio set mod lora")
         config.append("radio set sf sf12")
     elif type == 2:  # Lora SF7
-        configuration.name = 'LoraSF7'
+        reconfiguration.name = 'LoraSF7'
         config.append("radio set mod lora")
         config.append("radio set sf sf7")
     elif type == 3:  # FSK
-        configuration.name = 'fsk'
+        reconfiguration.name = 'fsk'
         config.append("radio set mod fsk")
         # config.append("radio set bitrate 40000")
+    elif type == 4:
+        reconfiguration.name = 'LoraSF9'
+        config.append("radio set mod lora")
+        config.append("radio set sf sf9")
     for c in config:
-        send(c, p)
+        command(c, port)
 
 
-
-def get_packet():
+def get_packet(port):
     get_packet.circle = 0
     while get_packet.circle < 24:
-        sendd("radio rx 1000", p)
-        s = p.readline()
-        if (s == b'ok\r\n')|(s == b'busy\r\n'):
-            s = p.readline()
-        get_packet.check = s[0:8]
-        if (get_packet.check == b'radio_rx'):
-            s_post = s.decode('ascii')          #проверка - получили?
-            # if ((s != b'radio_err\r\n')|(s != b'busy\r')|(s != b'ok\r\n'))&(s != b'')&(len(s.decode('utf-8')) > 4):
-            s_post = s_post.replace("radio_rx  ", "")
-            get_packet.data = s_post.replace("\r\n", "")    #запись полученных данных
-            # global h
-            # h = get_packet.data
 
-            get_packet.dehex = hextranslate(get_packet.data)    #расшифровка полученных данных
-
-            sendd("radio get snr", p)           #radio get snr
-            ans = p.readline()
-            if ans == b'ok\r\n':
-                tmp = p.readline()
-                tmp = tmp.decode('ascii')
-                tmp = tmp.replace('\r\n', '')
-                # tmp = tmp.replace("b\\", "")
-                get_packet.snr = tmp
-            else:
-                tmp = ans
-                tmp = tmp.decode('ascii')
-                tmp = tmp.replace('\r\n', '')
-                # tmp = tmp.replace("b\\", "")
-                get_packet.snr = tmp
-            return 1
-            # print(get_packet.data)
-            # print(get_packet.dehex)
-        # if not hasattr(get_packet, 'data'):
-        #     get_packet.data = s_post
-        elif(get_packet.check == b'radio_err\r\n'):     #проверка неполучили? или получили с ошибкой
-            get_packet.circle = get_packet.circle + 1
-            continue
-        get_packet.configType = configuration.name
+        get_packet.configType = reconfiguration.name
         get_packet.datetime = datetime.datetime.now()
-        # global j
-        # j = get_packet.circle
 
-            # print(s_post)
-            # print(configuration.name)
+        s = command_with_answer("radio rx 1000", port)
+        if s == b'busy\r\n':
+            time.sleep(0.2)
+            s = port.readline()
+        get_packet.check = s[0:8]
 
-        time.sleep(0.5)
-        get_packet.circle = get_packet.circle + 1
-    return 0
+        if get_packet.check == b'radio_err\r\n':
+            get_packet.data = 'None'
+            get_packet.dehex = 'None'
+            get_packet.snr = 'None'
 
-p = serial.Serial(tty, ttyb, timeout=1)
+            if get_packet.circle >= 23:
+                return 0
+            else:
+                continue
+
+        elif get_packet.check == b'radio_rx':
+            get_packet.data = s.decode('ascii').replace("radio_rx  ", "").replace("\r\n", "")
+            #get_packet.dehex = hex_translate(get_packet.data)
+            get_packet.snr = command_with_answer("radio get snr", port).decode('ascii').replace('\r\n', '')
+            return 1
+        get_packet.circle += 1
 
 
-#time.sleep(0.5)
 
+port = serial.Serial(tty, ttyb, timeout=1)
+time.sleep(0.1)
 print("READY FOR RX")
 
-conf = 1
-past = None
+conf = 4
+reconfiguration(conf)
+
+#past = None
+s = 1
 
 while True:
-    configuration(conf)
-    s = 0
-    while s < 10:
-        if get_packet():
-            Data = str(get_packet.datetime) + ';' + str(get_packet.configType) + ';' + str(get_packet.data) + ';' + str(get_packet.dehex)+ ';' + str(get_packet.snr) + '\r'
-        else:
-            Data = str(datetime.datetime.now()) + ';' + str(configuration.name) + ';' + 'None'
-        fd = open('data.csv', 'a')
-        fd.write(Data)
-        fd.close()
-        s = s + 1
-        print(Data)
-    conf += 1
-    if conf > 3: conf = 1
+    # while s < 10:
+    if get_packet(port):
+        Data = str(s) + ';' + str(get_packet.datetime) + ';' + str(get_packet.configType) + ';' + str(get_packet.data) +  ';' + str(get_packet.snr) + '\r'
+#+ str(get_packet.dehex)+
+    else:
+        Data = str(s) + ';' + str(datetime.datetime.now()) + ';' + str(reconfiguration.name) + ';' + 'None'
+    fd = open('data.csv', 'a')
+    fd.write(Data)
+    fd.close()
+    s = s + 1
+    print(Data)
