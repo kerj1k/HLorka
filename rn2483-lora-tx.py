@@ -10,6 +10,7 @@ ttyb=57600
 #devaddr="ABCDEF01"
 #device="nodes/"+devaddr
 
+#инициализация и конфигурация
 def configuration(type):
     config = []
     # config.append("sys factoryRESET")
@@ -41,6 +42,7 @@ def configuration(type):
     for c in config:
         send(c, p)
 
+# изменение настроек в процессе отправки пакетов
 def reconfig(type):
     config = []
     if type == 1:
@@ -69,6 +71,7 @@ def reconfig(type):
 #config.append('mac save')
 #config.append('mac join abp')
 
+# тупая отправка команд на модуль
 def send(data, p):
     data_bytes = data.encode('ascii')
     p.write(data_bytes + b'\x0d\x0a')
@@ -79,6 +82,7 @@ def send(data, p):
     # print(rdata)
     return 1
 
+# отправка команд на модуль чтобы сразу передавать в эфир 
 def sendtx(data, p):
     data_bytes = data.encode('ascii')
     p.write(data_bytes + b'\x0d\x0a')
@@ -90,9 +94,10 @@ def sendtx(data, p):
         return 1
     else:
         return 0
-
+# инициализация серийника
 p = serial.Serial(tty , ttyb)
 
+# процесс отправки пакетов с иницализацией и настройкой сначала
 time.sleep(1)
 i = 3
 configuration(i)
